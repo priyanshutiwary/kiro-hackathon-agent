@@ -5,6 +5,7 @@ import asyncio
 import logging
 from time import perf_counter
 from dotenv import load_dotenv
+from livekit.plugins import cartesia
 
 # Load environment variables first
 load_dotenv(dotenv_path=".env.local")
@@ -27,6 +28,22 @@ from src.services.call_service import CallService
 from src.services.greeting_service import GreetingService
 
 logger = logging.getLogger("payment-agent")
+
+
+def get_voice_config(payment_context):
+    """Get voice configuration based on language and gender."""
+    language = payment_context.language
+    gender = payment_context.voice_gender
+    
+    # Get language config, fallback to default if not found
+    lang_config = settings.LANGUAGE_CONFIG.get(language, settings.LANGUAGE_CONFIG[settings.DEFAULT_LANGUAGE])
+    
+    # Get voice ID for the specified gender, fallback to female if not found
+    voice_id = lang_config['voices'].get(gender, lang_config['voices']['female'])
+    
+    logger.info(f"Selected voice: language={language}, gender={gender}, voice_id={voice_id}")
+    
+    return voice_id
 
 
 async def entrypoint(ctx: JobContext) -> None:
@@ -78,11 +95,19 @@ async def entrypoint(ctx: JobContext) -> None:
         payment_context=payment_context
     )
 
+    # Get dynamic voice configuration based on language and gender
+    voice_id = get_voice_config(payment_context)
+    
     # Initialize agent session with voice capabilities
     session = AgentSession(
-        stt=deepgram.STT(model=settings.STT_MODEL),
+        stt=deepgram.STT(model=settings.STT_MODEL, language=settings.STT_LANGUAGE),
         llm=openai.LLM(),
-        tts=openai.TTS(),
+        tts=cartesia.TTS(
+            voice=voice_id,  # Dynamic voice based on language and gender
+            model="sonic-3",  # Use multilingual model
+            language=payment_context.language,  # Set language for TTS
+            speed=1.0,
+        ),
         vad=silero.VAD.load(),
     )
 

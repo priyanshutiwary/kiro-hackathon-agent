@@ -27,7 +27,9 @@ def parse_payment_context(metadata: str) -> PaymentContext:
                 invoice_number=context_data.get('invoice_number'),
                 amount_due=context_data.get('amount_due'),
                 due_date=context_data.get('due_date'),
-                company_name=context_data.get('company_name')
+                company_name=context_data.get('company_name'),
+                language=context_data.get('language', 'en'),  # Default to English
+                voice_gender=context_data.get('voice_gender', 'female')  # Default to female
             )
         else:
             # If not JSON, treat as phone number (legacy behavior)

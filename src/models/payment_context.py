@@ -12,16 +12,22 @@ class PaymentContext:
                  invoice_number: Optional[str] = None,
                  amount_due: Optional[float] = None,
                  due_date: Optional[str] = None,
-                 company_name: Optional[str] = None):
+                 company_name: Optional[str] = None,
+                 language: Optional[str] = None,
+                 voice_gender: Optional[str] = None):
         self.customer_name = customer_name or "valued customer"
         self.invoice_number = invoice_number or "your invoice"
         self.amount_due = amount_due
         self.due_date = due_date or "as soon as possible"
         self.company_name = company_name or "our company"
+        self.language = language or "en"  # Default to English
+        self.voice_gender = voice_gender or "female"  # Default to female voice
     
     def __repr__(self) -> str:
         return (f"PaymentContext(customer_name='{self.customer_name}', "
                 f"invoice_number='{self.invoice_number}', "
                 f"amount_due={self.amount_due}, "
                 f"due_date='{self.due_date}', "
-                f"company_name='{self.company_name}')")
+                f"company_name='{self.company_name}', "
+                f"language='{self.language}', "
+                f"voice_gender='{self.voice_gender}')")
