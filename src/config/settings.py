@@ -20,6 +20,10 @@ class Settings:
     # Agent configuration
     AGENT_NAME = "payment-reminder-agent"
     
+    # Webhook configuration (Requirement 4.5)
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+    
     # Voice & Language Settings
     STT_MODEL = "nova-3"
     STT_LANGUAGE = "multi"  # Options: en-US, en-IN, en-GB, hi (Hindi), etc.

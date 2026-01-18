@@ -7,3 +7,4 @@ livekit-plugins-silero>=1.3.10
 livekit-plugins-turn-detector>=1.3.10
 livekit-plugins-noise-cancellation>=0.2.2
 python-dotenv~=1.0
+aiohttp>=3.9.0

@@ -52,12 +52,27 @@ Copy `.env.example` to `.env.local` and fill in the values:
 - `OPENAI_API_KEY`
 - `DEEPGRAM_API_KEY`
 - `SIP_OUTBOUND_TRUNK_ID` (from steps below)
+- `WEBHOOK_URL` - The URL of your webhook endpoint (e.g., `https://yourdomain.com/api/webhooks/call-status`)
+- `WEBHOOK_SECRET` - Secret key for HMAC authentication (must match the backend `WEBHOOK_SECRET`)
 
 You can also populate LiveKit variables via CLI:
 
 ```console
 lk app env
 ```
+
+#### Webhook Configuration
+
+The agent sends call status updates to your backend via webhooks. Configure the following:
+
+1. Set `WEBHOOK_URL` to your webhook endpoint URL
+2. Set `WEBHOOK_SECRET` to a secure random string (must match your backend configuration)
+3. The agent will automatically send webhooks for:
+   - `call_answered` - When the call is successfully connected
+   - `call_completed` - When the call ends with outcome data
+   - `call_failed` - When the call fails to connect
+
+The webhook client implements automatic retry with exponential backoff (3 attempts) to ensure reliable delivery.
 
 ### Optional: pre-download models
 
@@ -146,3 +161,4 @@ python3 agent.py healthcheck    # validate required env vars
 python3 agent.py download-files # pre-download/cache models (e.g., VAD)
 python3 agent.py prewarm        # alias to download/cache models
 ```
+lk dispatch create \ --new-room \ --agent-name payment-reminder-agent \ --metadata '{"phone_number": "+916202390324", "language": "hi", "voice_gender": "female", "customer_name": "priyanshu kumar", "commeny_name": "JHT", "invoice_number": "INV-000005", "amount_due": 23230.00, "due_date": "13 February 2026"}'
