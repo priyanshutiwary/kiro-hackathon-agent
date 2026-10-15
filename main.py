@@ -21,7 +21,7 @@ from livekit.agents import (
     metrics,
 )
 from livekit.agents.voice import room_io
-from livekit.plugins import deepgram, openai, silero, noise_cancellation
+from livekit.plugins import deepgram, openai, sarvam, silero, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from src.config.settings import settings
@@ -46,8 +46,53 @@ def get_voice_config(payment_context):
     voice_id = lang_config['voices'].get(gender, lang_config['voices']['female'])
     
     logger.info(f"Selected voice: language={language}, gender={gender}, voice_id={voice_id}")
-    
+
     return voice_id
+
+
+def build_speech_pipeline(payment_context):
+    """
+    Pick STT and TTS for the call's language.
+
+    Languages in settings.SARVAM_LANGUAGES (Hindi, Hinglish by default) use Sarvam;
+    everything else uses Deepgram + Cartesia. Falls back to Deepgram + Cartesia
+    if SARVAM_API_KEY is not set so calls never fail on config.
+    """
+    language = payment_context.language
+    lang_config = settings.LANGUAGE_CONFIG.get(language, settings.LANGUAGE_CONFIG[settings.DEFAULT_LANGUAGE])
+    sarvam_config = lang_config.get("sarvam")
+
+    if language in settings.SARVAM_LANGUAGES and sarvam_config:
+        if settings.SARVAM_API_KEY:
+            speakers = sarvam_config["speakers"]
+            speaker = speakers.get(payment_context.voice_gender, speakers["female"])
+            logger.info(f"Using Sarvam: language={sarvam_config['language']}, speaker={speaker}")
+            stt = sarvam.STT(
+                model=settings.SARVAM_STT_MODEL,
+                language=sarvam_config["language"],
+            )
+            tts = sarvam.TTS(
+                model=settings.SARVAM_TTS_MODEL,
+                target_language_code=sarvam_config["language"],
+                speaker=speaker,
+                enable_preprocessing=True,  # Normalizes numbers and mixed-script text
+            )
+            return stt, tts
+        logger.warning(f"SARVAM_API_KEY not set - falling back to Deepgram + Cartesia for '{language}'")
+
+    stt = deepgram.STT(
+        model=settings.STT_MODEL,
+        language=settings.STT_LANGUAGE,
+        endpointing_ms=settings.STT_ENDPOINTING_MS,  # Natural pauses are handled by the turn detector
+        interim_results=True,  # Needed for preemptive generation
+    )
+    tts = cartesia.TTS(
+        voice=get_voice_config(payment_context),  # Dynamic voice based on language and gender
+        model="sonic-3",  # Use multilingual model
+        language="hi" if language == "hinglish" else language,  # Cartesia has no "hinglish" code
+        speed=1.0,
+    )
+    return stt, tts
 
 
 def log_latency(ev: MetricsCollectedEvent) -> None:
@@ -170,24 +215,14 @@ async def entrypoint(ctx: JobContext) -> None:
         payment_context=payment_context
     )
 
-    # Get dynamic voice configuration based on language and gender
-    voice_id = get_voice_config(payment_context)
-    
+    # Sarvam for Hindi/Hinglish, Deepgram + Cartesia otherwise
+    stt, tts = build_speech_pipeline(payment_context)
+
     # Initialize agent session with voice capabilities
     session = AgentSession(
-        stt=deepgram.STT(
-            model=settings.STT_MODEL, 
-            language=settings.STT_LANGUAGE,
-            endpointing_ms=settings.STT_ENDPOINTING_MS,  # Natural pauses are handled by the turn detector
-            interim_results=True,  # Needed for preemptive generation
-        ),
+        stt=stt,
         llm=openai.LLM(model=settings.LLM_MODEL),
-        tts=cartesia.TTS(
-            voice=voice_id,  # Dynamic voice based on language and gender
-            model="sonic-3",  # Use multilingual model
-            language=payment_context.language,  # Set language for TTS
-            speed=1.0,
-        ),
+        tts=tts,
         vad=ctx.proc.userdata["vad"],  # Loaded once in prewarm
         turn_detection=MultilingualModel(),  # Context-aware end-of-turn (supports Hindi)
         min_endpointing_delay=settings.MIN_ENDPOINTING_DELAY,

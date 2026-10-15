@@ -41,6 +41,15 @@ class Settings:
     # Start the LLM on interim transcripts before the turn is final
     PREEMPTIVE_GENERATION = True
 
+    # Sarvam (Indian-language STT/TTS)
+    SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
+    # Languages that use Sarvam instead of Deepgram/Cartesia (comma-separated, empty = off)
+    SARVAM_LANGUAGES = [
+        lang.strip() for lang in os.getenv("SARVAM_LANGUAGES", "hi,hinglish").split(",") if lang.strip()
+    ]
+    SARVAM_STT_MODEL = "saarika:v2.5"  # saaras models translate to English - not what we want
+    SARVAM_TTS_MODEL = "bulbul:v2"
+
     # Default language (fallback)
     DEFAULT_LANGUAGE = "en"
     
@@ -79,24 +88,36 @@ class Settings:
             "voices": {
                 "male": "6303e5fb-a0a7-48f9-bb1a-dd42c216dc5d",  # Cartesia multilingual male
                 "female": "95d51f79-c397-46f9-b49a-23763d3eaa2d"  # Cartesia multilingual female
-            }
+            },
+            "sarvam": {
+                "language": "hi-IN",
+                "speakers": {"male": "abhilash", "female": "anushka"},
+            },
         },
         "hinglish": {
             "name": "Hinglish",
             "greeting": "Hello",
             "tone": "casual and friendly", 
-            "instruction": "Mix Hindi and English naturally as Indians speak",
+            # Hindi words in Devanagari, English words in Latin script - TTS pronounces this best
+            "instruction": (
+                "Mix Hindi and English naturally as Indians speak. "
+                "Write Hindi words in Devanagari script and English words in English script"
+            ),
             "cultural_note": "Use familiar, conversational tone",
             "opening": (
-                "Hello {customer_name}, main {company_name} se bol {speaking} hoon, invoice "
-                "{invoice_number} ke payment ke baare mein, jo {amount} ka hai. "
-                "Payment mein koi issue aa raha hai kya?"
+                "Hello {customer_name}, मैं {company_name} से बोल {speaking} हूँ, invoice "
+                "{invoice_number} के payment के बारे में, जो {amount} का है। "
+                "Payment में कोई issue आ रहा है क्या?"
             ),
-            "speaking": {"female": "rahi", "male": "raha"},
+            "speaking": {"female": "रही", "male": "रहा"},
             "voices": {
                 "male": "fd2ada67-c2d9-4afe-b474-6386b87d8fc3",  # Cartesia multilingual male
                 "female": "95d51f79-c397-46f9-b49a-23763d3eaa2d"  # Cartesia multilingual female
-            }
+            },
+            "sarvam": {
+                "language": "hi-IN",  # saarika handles Hindi-English code-mixed speech under hi-IN
+                "speakers": {"male": "abhilash", "female": "anushka"},
+            },
         }
     }
     
