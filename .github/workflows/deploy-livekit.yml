@@ -1,0 +1,68 @@
+# Deploy the payment reminder agent to LiveKit Cloud.
+#
+# LiveKit Cloud builds the image from ./Dockerfile and deploys it to the agent
+# defined in livekit.toml (subdomain + agent id).
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET   - LiveKit Cloud project credentials
+#   OPENAI_API_KEY, DEEPGRAM_API_KEY, CARTESIA_API_KEY  - model providers
+#   SIP_OUTBOUND_TRUNK_ID                               - Twilio outbound trunk registered in LiveKit
+#   WEBHOOK_URL, WEBHOOK_SECRET                         - call status webhooks
+#
+# NOTE: LiveKit Cloud hosting is temporary - we plan to move to self-hosted
+# infra (e.g. AWS Mumbai) once volume justifies it.
+
+name: Deploy agent to LiveKit Cloud
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-livekit
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Syntax check
+        run: python -m compileall -q main.py agent.py src
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy agent
+        uses: livekit/deploy-action@v2
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          # Runtime secrets injected into the agent container
+          SECRET_LIST: >-
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},DEEPGRAM_API_KEY=${{ secrets.DEEPGRAM_API_KEY }},CARTESIA_API_KEY=${{ secrets.CARTESIA_API_KEY }},SIP_OUTBOUND_TRUNK_ID=${{ secrets.SIP_OUTBOUND_TRUNK_ID }},WEBHOOK_URL=${{ secrets.WEBHOOK_URL }},WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
+        with:
+          OPERATION: deploy
+          WORKING_DIRECTORY: .
+
+      - name: Wait for agent to be running
+        uses: livekit/deploy-action@v2
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        with:
+          OPERATION: status-retry
+          WORKING_DIRECTORY: .
+          TIMEOUT: 10m
