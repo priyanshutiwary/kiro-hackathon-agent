@@ -95,7 +95,7 @@ jobs:
           echo "SECRET_LIST=$list" >> "$GITHUB_ENV"
 
       - name: Deploy agent
-        uses: livekit/deploy-action@v2
+        uses: livekit/deploy-action@v2.12.2
         env:
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
           LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
@@ -106,7 +106,7 @@ jobs:
           WORKING_DIRECTORY: .
 
       - name: Wait for agent to be running
-        uses: livekit/deploy-action@v2
+        uses: livekit/deploy-action@v2.12.2
         env:
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
           LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
