@@ -2,10 +2,21 @@
 Configuration settings for the payment agent.
 """
 import os
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv(dotenv_path=".env.local")
+
+
+def _env(name: str, default: str) -> str:
+    """Read an env var, treating unset or blank as the default."""
+    return os.getenv(name, "").strip() or default
+
+
+def _env_list(name: str, default: str = "") -> list:
+    """Read a list env var separated by commas or semicolons (use ";" in GitHub deploy variables)."""
+    return [item.strip() for item in re.split(r"[,;]", _env(name, default)) if item.strip()]
 
 
 class Settings:
@@ -24,15 +35,33 @@ class Settings:
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
     
-    # Voice & Language Settings
-    STT_MODEL = "nova-3"
-    STT_LANGUAGE = "multi"  # Options: en-US, en-IN, en-GB, hi (Hindi), etc.
+    # --- Models (all overridable via env; blank = default) ---
+    
+    # Deepgram STT (English, and fallback for Sarvam languages)
+    STT_MODEL = _env("STT_MODEL", "nova-3")
+    STT_LANGUAGE = _env("STT_LANGUAGE", "multi")  # Options: en-US, en-IN, en-GB, hi (Hindi), multi
     # Keep Deepgram endpointing short; the turn detector model decides when the user is done
     STT_ENDPOINTING_MS = 25
-
-    # Smaller model = much lower time-to-first-token (plugin default is gpt-4.1)
-    LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
-
+    
+    # Cartesia TTS (English, and fallback for Sarvam languages)
+    TTS_MODEL = _env("TTS_MODEL", "sonic-3")
+    
+    # LLM provider: "openrouter" or "openai" (direct)
+    LLM_PROVIDER = _env("LLM_PROVIDER", "openrouter")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+    # Smaller model = much lower time-to-first-token (plugin default is gpt-4.1).
+    # OpenRouter model ids are "<vendor>/<model>"; the vendor prefix is stripped for direct OpenAI.
+    LLM_MODEL = _env("LLM_MODEL", "openai/gpt-4.1-mini")
+    # Optional OpenRouter fallback models (separated by , or ;), tried if the primary fails
+    LLM_FALLBACK_MODELS = _env_list("LLM_FALLBACK_MODELS")
+    
+    # Sarvam (Indian-language STT/TTS)
+    SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
+    # Languages that use Sarvam instead of Deepgram/Cartesia (separated by , or ;  "none" = off)
+    SARVAM_LANGUAGES = [lang for lang in _env_list("SARVAM_LANGUAGES", "hi,hinglish") if lang != "none"]
+    SARVAM_STT_MODEL = _env("SARVAM_STT_MODEL", "saarika:v2.5")  # saaras models translate to English - avoid
+    SARVAM_TTS_MODEL = _env("SARVAM_TTS_MODEL", "bulbul:v2")
+    
     # Latency tuning (seconds)
     # Silence to wait after the turn detector thinks the user is done
     MIN_ENDPOINTING_DELAY = 0.3
@@ -40,15 +69,6 @@ class Settings:
     MAX_ENDPOINTING_DELAY = 2.0
     # Start the LLM on interim transcripts before the turn is final
     PREEMPTIVE_GENERATION = True
-
-    # Sarvam (Indian-language STT/TTS)
-    SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
-    # Languages that use Sarvam instead of Deepgram/Cartesia (comma-separated, empty = off)
-    SARVAM_LANGUAGES = [
-        lang.strip() for lang in os.getenv("SARVAM_LANGUAGES", "hi,hinglish").split(",") if lang.strip()
-    ]
-    SARVAM_STT_MODEL = "saarika:v2.5"  # saaras models translate to English - not what we want
-    SARVAM_TTS_MODEL = "bulbul:v2"
 
     # Default language (fallback)
     DEFAULT_LANGUAGE = "en"

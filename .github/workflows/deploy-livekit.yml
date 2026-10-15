@@ -5,10 +5,20 @@
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET   - LiveKit Cloud project credentials
-#   OPENAI_API_KEY, DEEPGRAM_API_KEY, CARTESIA_API_KEY  - model providers
+#   OPENROUTER_API_KEY                                  - LLM (via OpenRouter)
+#   OPENAI_API_KEY                                      - fallback LLM if OpenRouter key is unset
+#   DEEPGRAM_API_KEY, CARTESIA_API_KEY                  - English STT + TTS
 #   SARVAM_API_KEY                                      - Hindi / Hinglish STT + TTS
 #   SIP_OUTBOUND_TRUNK_ID                               - Twilio outbound trunk registered in LiveKit
 #   WEBHOOK_URL, WEBHOOK_SECRET                         - call status webhooks
+#
+# Optional repository variables (Settings -> Secrets and variables -> Actions -> Variables)
+# to change models without code changes. Unset = default from src/config/settings.py:
+#   LLM_PROVIDER, LLM_MODEL, LLM_FALLBACK_MODELS
+#   STT_MODEL, STT_LANGUAGE, TTS_MODEL
+#   SARVAM_LANGUAGES, SARVAM_STT_MODEL, SARVAM_TTS_MODEL
+# Values must not contain commas - separate list values with ';' (e.g. hi;hinglish).
+# After changing a variable, re-run this workflow (Actions -> Run workflow) to apply it.
 #
 # NOTE: LiveKit Cloud hosting is temporary - we plan to move to self-hosted
 # infra (e.g. AWS Mumbai) once volume justifies it.
@@ -44,15 +54,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Runtime env for the agent container. Only non-empty values are sent, so unset
+      # optional secrets/variables fall back to the defaults in settings.py.
+      - name: Build agent env
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
+          SARVAM_API_KEY: ${{ secrets.SARVAM_API_KEY }}
+          SIP_OUTBOUND_TRUNK_ID: ${{ secrets.SIP_OUTBOUND_TRUNK_ID }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_FALLBACK_MODELS: ${{ vars.LLM_FALLBACK_MODELS }}
+          STT_MODEL: ${{ vars.STT_MODEL }}
+          STT_LANGUAGE: ${{ vars.STT_LANGUAGE }}
+          TTS_MODEL: ${{ vars.TTS_MODEL }}
+          SARVAM_LANGUAGES: ${{ vars.SARVAM_LANGUAGES }}
+          SARVAM_STT_MODEL: ${{ vars.SARVAM_STT_MODEL }}
+          SARVAM_TTS_MODEL: ${{ vars.SARVAM_TTS_MODEL }}
+        run: |
+          names="OPENROUTER_API_KEY OPENAI_API_KEY DEEPGRAM_API_KEY CARTESIA_API_KEY SARVAM_API_KEY
+                 SIP_OUTBOUND_TRUNK_ID WEBHOOK_URL WEBHOOK_SECRET
+                 LLM_PROVIDER LLM_MODEL LLM_FALLBACK_MODELS STT_MODEL STT_LANGUAGE TTS_MODEL
+                 SARVAM_LANGUAGES SARVAM_STT_MODEL SARVAM_TTS_MODEL"
+          list=""
+          for name in $names; do
+            value="${!name}"
+            if [[ "$value" == *,* ]]; then
+              echo "::error::$name contains a comma, which breaks the agent env list. Use ';' to separate list values."
+              exit 1
+            fi
+            if [ -n "$value" ]; then
+              list="${list:+$list,}$name=$value"
+            fi
+          done
+          echo "::add-mask::$list"
+          echo "SECRET_LIST=$list" >> "$GITHUB_ENV"
+
       - name: Deploy agent
         uses: livekit/deploy-action@v2
         env:
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
           LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
           LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
-          # Runtime secrets injected into the agent container
-          SECRET_LIST: >-
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},DEEPGRAM_API_KEY=${{ secrets.DEEPGRAM_API_KEY }},CARTESIA_API_KEY=${{ secrets.CARTESIA_API_KEY }},SARVAM_API_KEY=${{ secrets.SARVAM_API_KEY }},SIP_OUTBOUND_TRUNK_ID=${{ secrets.SIP_OUTBOUND_TRUNK_ID }},WEBHOOK_URL=${{ secrets.WEBHOOK_URL }},WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
+          SECRET_LIST: ${{ env.SECRET_LIST }}
         with:
           OPERATION: deploy
           WORKING_DIRECTORY: .

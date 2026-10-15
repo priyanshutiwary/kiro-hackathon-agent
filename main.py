@@ -50,6 +50,30 @@ def get_voice_config(payment_context):
     return voice_id
 
 
+def build_llm():
+    """
+    Create the LLM client.
+
+    Uses OpenRouter (routed to the lowest-latency provider) when LLM_PROVIDER=openrouter,
+    otherwise OpenAI directly. Falls back to OpenAI if OPENROUTER_API_KEY is not set.
+    """
+    if settings.LLM_PROVIDER == "openrouter":
+        if settings.OPENROUTER_API_KEY:
+            logger.info(f"Using OpenRouter: model={settings.LLM_MODEL}, fallbacks={settings.LLM_FALLBACK_MODELS}")
+            return openai.LLM.with_openrouter(
+                model=settings.LLM_MODEL,
+                fallback_models=settings.LLM_FALLBACK_MODELS or None,
+                provider={"sort": "latency"},  # Voice calls care about time-to-first-token most
+                app_name=settings.AGENT_NAME,
+            )
+        logger.warning("OPENROUTER_API_KEY not set - falling back to OpenAI directly")
+
+    # OpenAI expects bare model ids ("gpt-4.1-mini", not "openai/gpt-4.1-mini")
+    model = settings.LLM_MODEL.split("/", 1)[-1]
+    logger.info(f"Using OpenAI: model={model}")
+    return openai.LLM(model=model)
+
+
 def build_speech_pipeline(payment_context):
     """
     Pick STT and TTS for the call's language.
@@ -88,7 +112,7 @@ def build_speech_pipeline(payment_context):
     )
     tts = cartesia.TTS(
         voice=get_voice_config(payment_context),  # Dynamic voice based on language and gender
-        model="sonic-3",  # Use multilingual model
+        model=settings.TTS_MODEL,
         language="hi" if language == "hinglish" else language,  # Cartesia has no "hinglish" code
         speed=1.0,
     )
@@ -221,7 +245,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # Initialize agent session with voice capabilities
     session = AgentSession(
         stt=stt,
-        llm=openai.LLM(model=settings.LLM_MODEL),
+        llm=build_llm(),
         tts=tts,
         vad=ctx.proc.userdata["vad"],  # Loaded once in prewarm
         turn_detection=MultilingualModel(),  # Context-aware end-of-turn (supports Hindi)
