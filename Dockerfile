@@ -34,5 +34,5 @@ USER appuser
 RUN python agent.py download-files
 
 # Start the agent
-# Note: In 1.0, 'dev' or 'start' commands are used via the livekit-agents CLI
-CMD ["python", "agent.py", "dev"]
+# "start" is production mode ("dev" adds hot-reload and verbose logging)
+CMD ["python", "agent.py", "start"]

@@ -17,9 +17,12 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     AgentSession,
+    MetricsCollectedEvent,
+    metrics,
 )
 from livekit.agents.voice import room_io
 from livekit.plugins import deepgram, openai, silero, noise_cancellation
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from src.config.settings import settings
 from src.utils.context_parser import parse_payment_context
@@ -45,6 +48,18 @@ def get_voice_config(payment_context):
     logger.info(f"Selected voice: language={language}, gender={gender}, voice_id={voice_id}")
     
     return voice_id
+
+
+def log_latency(ev: MetricsCollectedEvent) -> None:
+    """Log per-turn latency so slow pipeline stages are visible in the logs."""
+    m = ev.metrics
+    if isinstance(m, metrics.EOUMetrics):
+        logger.info(f"[latency] end_of_utterance={m.end_of_utterance_delay:.2f}s "
+                    f"transcription={m.transcription_delay:.2f}s")
+    elif isinstance(m, metrics.LLMMetrics):
+        logger.info(f"[latency] llm_ttft={m.ttft:.2f}s tokens={m.completion_tokens}")
+    elif isinstance(m, metrics.TTSMetrics):
+        logger.info(f"[latency] tts_ttfb={m.ttfb:.2f}s")
 
 
 async def entrypoint(ctx: JobContext) -> None:
@@ -163,18 +178,23 @@ async def entrypoint(ctx: JobContext) -> None:
         stt=deepgram.STT(
             model=settings.STT_MODEL, 
             language=settings.STT_LANGUAGE,
-            endpointing_ms=500,  # Increased from default 25ms to allow natural pauses
-            interim_results=True,  # Keep interim results for better responsiveness
+            endpointing_ms=settings.STT_ENDPOINTING_MS,  # Natural pauses are handled by the turn detector
+            interim_results=True,  # Needed for preemptive generation
         ),
-        llm=openai.LLM(),
+        llm=openai.LLM(model=settings.LLM_MODEL),
         tts=cartesia.TTS(
             voice=voice_id,  # Dynamic voice based on language and gender
             model="sonic-3",  # Use multilingual model
             language=payment_context.language,  # Set language for TTS
             speed=1.0,
         ),
-        vad=silero.VAD.load(),
+        vad=ctx.proc.userdata["vad"],  # Loaded once in prewarm
+        turn_detection=MultilingualModel(),  # Context-aware end-of-turn (supports Hindi)
+        min_endpointing_delay=settings.MIN_ENDPOINTING_DELAY,
+        max_endpointing_delay=settings.MAX_ENDPOINTING_DELAY,
+        preemptive_generation=settings.PREEMPTIVE_GENERATION,
     )
+    session.on("metrics_collected", log_latency)
 
     # Start the session
     await session.start(
@@ -187,9 +207,9 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
     )
 
-    # Generate and deliver professional greeting
-    greeting_instructions = GreetingService.generate_greeting_instructions(payment_context)
-    await session.generate_reply(instructions=greeting_instructions)
+    # Speak the scripted opening directly - no LLM round-trip before the first words
+    greeting_text = GreetingService.generate_greeting_text(payment_context)
+    session.say(greeting_text)
 
     # Keep the job alive until the participant leaves or timeout
     start_time = perf_counter()

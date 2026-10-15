@@ -6,7 +6,38 @@ from src.models.payment_context import PaymentContext
 
 class GreetingService:
     """Service to generate professional and courteous greeting messages."""
-    
+
+    @staticmethod
+    def generate_greeting_text(payment_context: PaymentContext) -> str:
+        """
+        Build the scripted opening line for the call.
+
+        Spoken directly via session.say() so the caller hears the agent
+        immediately instead of waiting for an LLM round-trip.
+
+        Args:
+            payment_context: Payment context containing customer and invoice details
+
+        Returns:
+            Opening line in the call's language
+        """
+        from src.config.settings import settings
+
+        amount_text = f"${payment_context.amount_due:.2f}" if payment_context.amount_due else "the outstanding amount"
+
+        language = payment_context.language
+        lang_config = settings.LANGUAGE_CONFIG.get(language, settings.LANGUAGE_CONFIG[settings.DEFAULT_LANGUAGE])
+        speaking = lang_config.get("speaking", {})
+
+        return lang_config["opening"].format(
+            customer_name=payment_context.customer_name,
+            company_name=payment_context.company_name,
+            invoice_number=payment_context.invoice_number,
+            amount=amount_text,
+            due_date=payment_context.due_date,
+            speaking=speaking.get(payment_context.voice_gender, speaking.get("female", "")),
+        )
+
     @staticmethod
     def generate_greeting_instructions(payment_context: PaymentContext) -> str:
         """
