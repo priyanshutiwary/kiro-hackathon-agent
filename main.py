@@ -99,7 +99,6 @@ def build_speech_pipeline(payment_context):
                 model=settings.SARVAM_TTS_MODEL,
                 target_language_code=sarvam_config["language"],
                 speaker=speaker,
-                enable_preprocessing=True,  # Normalizes numbers and mixed-script text
             )
             return stt, tts
         logger.warning(f"SARVAM_API_KEY not set - falling back to Deepgram + Cartesia for '{language}'")

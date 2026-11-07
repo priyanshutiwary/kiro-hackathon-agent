@@ -59,8 +59,8 @@ class Settings:
     SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
     # Languages that use Sarvam instead of Deepgram/Cartesia (separated by , or ;  "none" = off)
     SARVAM_LANGUAGES = [lang for lang in _env_list("SARVAM_LANGUAGES", "hi,hinglish") if lang != "none"]
-    SARVAM_STT_MODEL = _env("SARVAM_STT_MODEL", "saarika:v2.5")  # saaras models translate to English - avoid
-    SARVAM_TTS_MODEL = _env("SARVAM_TTS_MODEL", "bulbul:v2")
+    SARVAM_STT_MODEL = _env("SARVAM_STT_MODEL", "saaras:v3")  # defaults to mode="transcribe" (keeps Hindi, no translation)
+    SARVAM_TTS_MODEL = _env("SARVAM_TTS_MODEL", "bulbul:v3")  # bulbul:v2 is retired by Sarvam (422)
     
     # Latency tuning (seconds)
     # Silence to wait after the turn detector thinks the user is done
@@ -111,7 +111,7 @@ class Settings:
             },
             "sarvam": {
                 "language": "hi-IN",
-                "speakers": {"male": "abhilash", "female": "anushka"},
+                "speakers": {"male": "rahul", "female": "priya"},  # bulbul:v3 customer-care voices
             },
         },
         "hinglish": {
@@ -136,7 +136,7 @@ class Settings:
             },
             "sarvam": {
                 "language": "hi-IN",  # saarika handles Hindi-English code-mixed speech under hi-IN
-                "speakers": {"male": "abhilash", "female": "anushka"},
+                "speakers": {"male": "rahul", "female": "priya"},  # bulbul:v3 customer-care voices
             },
         }
     }
