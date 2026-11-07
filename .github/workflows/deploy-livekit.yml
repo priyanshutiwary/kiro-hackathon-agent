@@ -12,13 +12,13 @@
 #   SIP_OUTBOUND_TRUNK_ID                               - Twilio outbound trunk registered in LiveKit
 #   WEBHOOK_URL, WEBHOOK_SECRET                         - call status webhooks
 #
-# Optional repository variables (Settings -> Secrets and variables -> Actions -> Variables)
-# to change models without code changes. Unset = default from src/config/settings.py:
+# Optional repository secrets (same place) to change models without code changes.
+# Unset = default from src/config/settings.py:
 #   LLM_PROVIDER, LLM_MODEL, LLM_FALLBACK_MODELS
 #   STT_MODEL, STT_LANGUAGE, TTS_MODEL
 #   SARVAM_LANGUAGES, SARVAM_STT_MODEL, SARVAM_TTS_MODEL
 # Values must not contain commas - separate list values with ';' (e.g. hi;hinglish).
-# After changing a variable, re-run this workflow (Actions -> Run workflow) to apply it.
+# After changing a secret, re-run this workflow (Actions -> Run workflow) to apply it.
 #
 # NOTE: LiveKit Cloud hosting is temporary - we plan to move to self-hosted
 # infra (e.g. AWS Mumbai) once volume justifies it.
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Runtime env for the agent container. Only non-empty values are sent, so unset
-      # optional secrets/variables fall back to the defaults in settings.py.
+      # optional secrets fall back to the defaults in settings.py.
       - name: Build agent env
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -66,15 +66,15 @@ jobs:
           SIP_OUTBOUND_TRUNK_ID: ${{ secrets.SIP_OUTBOUND_TRUNK_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          LLM_FALLBACK_MODELS: ${{ vars.LLM_FALLBACK_MODELS }}
-          STT_MODEL: ${{ vars.STT_MODEL }}
-          STT_LANGUAGE: ${{ vars.STT_LANGUAGE }}
-          TTS_MODEL: ${{ vars.TTS_MODEL }}
-          SARVAM_LANGUAGES: ${{ vars.SARVAM_LANGUAGES }}
-          SARVAM_STT_MODEL: ${{ vars.SARVAM_STT_MODEL }}
-          SARVAM_TTS_MODEL: ${{ vars.SARVAM_TTS_MODEL }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          LLM_FALLBACK_MODELS: ${{ secrets.LLM_FALLBACK_MODELS }}
+          STT_MODEL: ${{ secrets.STT_MODEL }}
+          STT_LANGUAGE: ${{ secrets.STT_LANGUAGE }}
+          TTS_MODEL: ${{ secrets.TTS_MODEL }}
+          SARVAM_LANGUAGES: ${{ secrets.SARVAM_LANGUAGES }}
+          SARVAM_STT_MODEL: ${{ secrets.SARVAM_STT_MODEL }}
+          SARVAM_TTS_MODEL: ${{ secrets.SARVAM_TTS_MODEL }}
         run: |
           names="OPENROUTER_API_KEY OPENAI_API_KEY DEEPGRAM_API_KEY CARTESIA_API_KEY SARVAM_API_KEY
                  SIP_OUTBOUND_TRUNK_ID WEBHOOK_URL WEBHOOK_SECRET
@@ -89,6 +89,14 @@ jobs:
             fi
             if [ -n "$value" ]; then
               list="${list:+$list,}$name=$value"
+              sent="$sent $name"
+            fi
+          done
+          # Names only, never values - shows what the agent will actually receive
+          echo "Sending to agent:$sent"
+          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY SARVAM_API_KEY SIP_OUTBOUND_TRUNK_ID WEBHOOK_URL WEBHOOK_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::$name is not set in GitHub secrets (repo or 'production' environment) - the agent will not receive it"
             fi
           done
           echo "::add-mask::$list"
